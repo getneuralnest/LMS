@@ -1,22 +1,12 @@
-import { cookies } from "next/headers";
-import { createClient } from "../utils/supabase/server";
+import Link from "next/link";
 
-export default async function Home() {
-  const cookieStore = await cookies();
-  const supabase = createClient(cookieStore);
-
-  const { data: todos } = await supabase.from("todos").select();
-
+export default function Home() {
   return (
-    <main>
-      <h1>Class Portal</h1>
-      {todos && todos.length > 0 && (
-        <ul>
-          {todos.map((todo) => (
-            <li key={todo.id}>{todo.name}</li>
-          ))}
-        </ul>
-      )}
+    <main className="mx-auto max-w-5xl space-y-4 px-6 py-10">
+      <h1 className="text-2xl font-semibold">Class Portal</h1>
+      <Link href="/login" className="text-sm underline underline-offset-4">
+        Sign in
+      </Link>
     </main>
   );
 }

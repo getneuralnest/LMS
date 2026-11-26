@@ -1,18 +1,18 @@
 begin;
 
-select plan(39);
+select plan(54);
 
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at
 )
 values
-  ('00000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'teacher@class.local', '', now(), '{}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'student-a@class.local', '', now(), '{}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'student-b@class.local', '', now(), '{}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000004', 'authenticated', 'authenticated', 'other-teacher@class.local', '', now(), '{}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000005', 'authenticated', 'authenticated', 'other-student@class.local', '', now(), '{}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000006', 'authenticated', 'authenticated', 'class-rep@class.local', '', now(), '{}', '{}', now(), now());
+  ('00000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'rls-teacher@class.local', '', now(), '{}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'rls-student-a@class.local', '', now(), '{}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'rls-student-b@class.local', '', now(), '{}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-000000000004', 'authenticated', 'authenticated', 'rls-other-teacher@class.local', '', now(), '{}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-000000000005', 'authenticated', 'authenticated', 'rls-other-student@class.local', '', now(), '{}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-000000000006', 'authenticated', 'authenticated', 'rls-class-rep@class.local', '', now(), '{}', '{}', now(), now());
 
 insert into public.profiles (id, full_name, username, roll_no)
 values
@@ -35,18 +35,35 @@ values
   ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000005', 'student'),
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000006', 'cr');
 
+update public.class_members
+set roll_no = 'R-1', uni_roll_no = 'U-1'
+where class_id = '10000000-0000-0000-0000-000000000001'
+  and user_id = '00000000-0000-0000-0000-000000000002';
+update public.class_members
+set roll_no = 'R-2', uni_roll_no = 'U-2'
+where class_id = '10000000-0000-0000-0000-000000000001'
+  and user_id = '00000000-0000-0000-0000-000000000003';
+update public.class_members
+set roll_no = 'R-1', uni_roll_no = 'U-1'
+where class_id = '10000000-0000-0000-0000-000000000002'
+  and user_id = '00000000-0000-0000-0000-000000000005';
+
 insert into public.class_sessions (id, class_id, subject, starts_at, ends_at)
 values
   ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'Math', now() - interval '1 hour', now() + interval '1 hour'),
   ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'Science', now() - interval '1 hour', now() + interval '1 hour'),
-  ('20000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'History', now() - interval '2 hours', now() + interval '1 hour');
+  ('20000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'History', now() - interval '2 hours', now() + interval '1 hour'),
+  ('20000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000001', 'Biology', now() - interval '2 hours', now() - interval '1 hour'),
+  ('20000000-0000-0000-0000-000000000005', '10000000-0000-0000-0000-000000000001', 'Physics', now() - interval '1 hour', now() + interval '1 hour'),
+  ('20000000-0000-0000-0000-000000000006', '10000000-0000-0000-0000-000000000001', 'Chemistry', now() - interval '1 hour', now() + interval '1 hour');
 
 insert into public.attendance (id, class_id, session_id, student_id, status)
 values
   ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', 'present'),
   ('30000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000003', 'absent'),
   ('30000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000002', null),
-  ('30000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000005', 'present');
+  ('30000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000005', 'present'),
+  ('30000000-0000-0000-0000-000000000005', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000002', null);
 
 update public.class_sessions
 set ends_at = now() - interval '1 hour'
@@ -71,6 +88,31 @@ values
   ('60000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'collection', 25, 'Class supplies', null, '00000000-0000-0000-0000-000000000001'),
   ('60000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'fine', 5, 'Late fine B', '00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001'),
   ('60000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000002', 'collection', 15, 'Other class collection', null, '00000000-0000-0000-0000-000000000004');
+
+select throws_ok(
+  $$insert into public.class_members (class_id, user_id, role, roll_no, uni_roll_no)
+    values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000005', 'student', 'R-1', 'U-3')$$,
+  '23505',
+  null,
+  'roll numbers are unique within a class'
+);
+select throws_ok(
+  $$insert into public.class_members (class_id, user_id, role, roll_no, uni_roll_no)
+    values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000005', 'student', 'R-3', 'U-1')$$,
+  '23505',
+  null,
+  'university roll numbers are unique within a class'
+);
+select is(
+  (select count(*)::integer from public.class_members where roll_no = 'R-1'),
+  2,
+  'same roll number is allowed in different classes'
+);
+select is(
+  (select count(*)::integer from public.class_members where uni_roll_no = 'U-1'),
+  2,
+  'same university roll number is allowed in different classes'
+);
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated","app_metadata":{}}';
@@ -130,12 +172,83 @@ select is(
   1,
   'student can read own profile'
 );
+select is(
+  public.has_role('10000000-0000-0000-0000-000000000001', array['teacher']),
+  false,
+  'non-teacher is not authorized to create students'
+);
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000004","role":"authenticated","app_metadata":{}}';
+select is(
+  public.has_role('10000000-0000-0000-0000-000000000001', array['teacher']),
+  false,
+  'teacher of another class is not authorized for this class'
+);
+select is(
+  (select count(*)::integer from public.profiles where id = '00000000-0000-0000-0000-000000000002'),
+  0,
+  'teacher cannot read another class student profiles'
+);
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated","app_metadata":{}}';
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000001","role":"authenticated","app_metadata":{}}';
-select results_eq(
+select lives_ok(
+  $$update public.class_sessions set ends_at = ends_at + interval '1 hour'
+    where id = '20000000-0000-0000-0000-000000000001' returning id$$,
+  'teacher can adjust an upcoming session end'
+);
+select is(
+  (select count(*)::integer
+    from public.audit_log
+    where table_name = 'class_sessions'
+      and row_id = '20000000-0000-0000-0000-000000000001'
+      and action = 'UPDATE'
+      and actor = auth.uid()
+      and (old ->> 'ends_at')::timestamptz < (new ->> 'ends_at')::timestamptz),
+  1,
+  'session end adjustments are audit logged'
+);
+select throws_ok(
   $$update public.class_sessions set ends_at = now() + interval '1 hour'
     where id = '20000000-0000-0000-0000-000000000003' returning id$$,
-  array[]::uuid[],
+  '55000',
+  'The session has ended',
   'teacher cannot extend a session after it ends'
+);
+select throws_ok(
+  $$update public.class_sessions set starts_at = starts_at - interval '1 day'
+    where id = '20000000-0000-0000-0000-000000000004' returning id$$,
+  '55000',
+  'The session has ended',
+  'teacher cannot change the start of an ended session'
+);
+select throws_ok(
+  $$update public.class_sessions set late_fine = 5
+    where id = '20000000-0000-0000-0000-000000000004' returning id$$,
+  '55000',
+  'The session has ended',
+  'teacher cannot change the late fine of an ended session'
+);
+select throws_ok(
+  $$update public.class_sessions set class_id = '10000000-0000-0000-0000-000000000002'
+    where id = '20000000-0000-0000-0000-000000000004' returning id$$,
+  '55000',
+  'The session has ended',
+  'teacher cannot move an ended session to another class'
+);
+select throws_ok(
+  $$delete from public.class_sessions where id = '20000000-0000-0000-0000-000000000004' returning id$$,
+  '55000',
+  'The session has ended',
+  'ended sessions without attendance cannot be deleted'
+);
+select throws_ok(
+  $$delete from public.class_sessions where id = '20000000-0000-0000-0000-000000000005' returning id$$,
+  '55000',
+  'Class session has attendance',
+  'sessions with attendance cannot be deleted'
+);
+select lives_ok(
+  $$delete from public.class_sessions where id = '20000000-0000-0000-0000-000000000006' returning id$$,
+  'upcoming sessions without attendance can be deleted'
 );
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated","app_metadata":{}}';
 select throws_ok(
@@ -214,16 +327,18 @@ select throws_ok(
   'The session has ended',
   'teacher cannot insert attendance after the session ends'
 );
-select results_eq(
+select throws_ok(
   $$update public.attendance set status = 'present'
     where id = '30000000-0000-0000-0000-000000000003' returning id$$,
-  array[]::uuid[],
+  '55000',
+  'The session has ended',
   'teacher cannot update attendance after the session ends'
 );
-select results_eq(
+select throws_ok(
   $$update public.attendance set status = 'absent', locked = true
     where id = '30000000-0000-0000-0000-000000000003' returning id$$,
-  array[]::uuid[],
+  '55000',
+  'The session has ended',
   'authenticated teacher cannot perform cron finalization'
 );
 
@@ -325,8 +440,8 @@ select is(
 );
 select is(
   (select count(*)::integer from public.profiles),
-  0,
-  'must_change_password blocks profile access'
+  1,
+  'must_change_password permits only the own profile'
 );
 
 select * from finish();

@@ -62,9 +62,24 @@ jobs:
       - run: npm ci
       - run: npx supabase start
       - run: npx supabase db reset
-      - run: npx supabase status -o env >> "$GITHUB_ENV"
-      - run: |
-          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
-          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+      - name: Export local Supabase test credentials
+        run: |
+          npx supabase status -o env > "$RUNNER_TEMP/supabase.env"
+          set -a
+          . "$RUNNER_TEMP/supabase.env"
+          set +a
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA"
+            echo "E2E_TEACHER_PASSWORD=Local-Teacher-Password-8"
+          } >> "$GITHUB_ENV"
+      - name: Serve Edge Functions
+        run: |
+          npx supabase functions serve --no-verify-jwt > "$RUNNER_TEMP/supabase-functions.log" 2>&1 &
+          curl --retry 30 --retry-connrefused --retry-delay 1 --max-time 2 --silent --show-error \
+            --request POST --header "Content-Type: application/json" --data '{}' \
+            http://127.0.0.1:54321/functions/v1/create-students
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

@@ -1,10 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+import { getSupabasePublicEnvironment } from "../../lib/supabase-env";
 
 export const createClient = async (request: NextRequest) => {
+  const { NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY } =
+    getSupabasePublicEnvironment();
   // Create an unmodified response
   let supabaseResponse = NextResponse.next({
     request: {
@@ -13,8 +13,8 @@ export const createClient = async (request: NextRequest) => {
   });
 
   const supabase = createServerClient(
-    supabaseUrl!,
-    supabaseKey!,
+    NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
       cookies: {
         getAll() {
@@ -35,9 +35,20 @@ export const createClient = async (request: NextRequest) => {
     },
   );
 
-  // Refresh session if expired
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
+  if (
+    user?.app_metadata.must_change_password === true &&
+    request.nextUrl.pathname !== "/change-password"
+  ) {
+    const redirectResponse = NextResponse.redirect(new URL("/change-password", request.url));
+    for (const cookie of supabaseResponse.cookies.getAll()) {
+      redirectResponse.cookies.set(cookie);
+    }
+    return redirectResponse;
+  }
   return supabaseResponse;
 };
 

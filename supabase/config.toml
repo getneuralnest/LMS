@@ -10,7 +10,8 @@ max_rows = 1000
 major_version = 15
 
 [db.seed]
-enabled = false
+enabled = true
+sql_paths = ["./seed.sql"]
 
 [studio]
 enabled = true
@@ -27,3 +28,15 @@ minimum_password_length = 8
 enabled = true
 double_confirm_changes = true
 enable_confirmations = false
+
+[auth.captcha]
+enabled = true
+provider = "turnstile"
+secret = "1x0000000000000000000000000000000AA"
+
+[auth.rate_limit]
+email_sent = 2
+sms_sent = 2
+token_refresh = 30
+sign_in_sign_ups = 10
+token_verifications = 5

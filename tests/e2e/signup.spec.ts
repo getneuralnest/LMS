@@ -13,6 +13,7 @@ test("Supabase email self-signup is disabled", async ({ request }) => {
     data: {
       email: `signup-disabled-${crypto.randomUUID()}@class.local`,
       password: "Signup-disabled-test-password-8",
+      gotrue_meta_security: { captcha_token: "signup-disabled-test-token" },
     },
   });
 
