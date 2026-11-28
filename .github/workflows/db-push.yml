@@ -1,0 +1,26 @@
+name: Production DB push
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type push-production to continue
+        required: true
+permissions:
+  contents: read
+jobs:
+  push:
+    if: ${{ github.event.inputs.confirm == 'push-production' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Preview
+        run: npx supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      - name: Apply
+        run: npx supabase db push --db-url "$SUPABASE_DB_URL"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
