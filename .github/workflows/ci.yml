@@ -72,9 +72,10 @@ jobs:
             echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
             echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
             echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_SITE_URL=http://localhost:3001"
             echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA"
-            echo "E2E_TEACHER_PASSWORD=Local-Teacher-Password-8"
           } >> "$GITHUB_ENV"
+          node -e 'const fs=require("node:fs");const crypto=require("node:crypto");fs.appendFileSync(process.env.GITHUB_ENV, `E2E_ADMIN_PASSWORD=E2e-${crypto.randomBytes(24).toString("base64url")}!Aa8\nE2E_TEACHER_PASSWORD=E2e-${crypto.randomBytes(24).toString("base64url")}!Aa8\n`)'
       - name: Serve Edge Functions
         run: |
           npx supabase functions serve --no-verify-jwt > "$RUNNER_TEMP/supabase-functions.log" 2>&1 &

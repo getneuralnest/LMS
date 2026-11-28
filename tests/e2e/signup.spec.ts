@@ -11,12 +11,12 @@ test("Supabase email self-signup is disabled", async ({ request }) => {
   const response = await request.post(`${supabaseUrl}/auth/v1/signup`, {
     headers: { apikey: publishableKey },
     data: {
-      email: `signup-disabled-${crypto.randomUUID()}@class.local`,
+      email: `signup-disabled-${crypto.randomUUID()}@students.example.com`,
       password: "Signup-disabled-test-password-8",
-      gotrue_meta_security: { captcha_token: "signup-disabled-test-token" },
+      gotrue_meta_security: { captcha_token: "XXXX.DUMMY.TOKEN.XXXX" },
     },
   });
 
-  expect(response.status()).toBe(400);
+  expect(response.status()).toBe(422);
   expect(await response.text()).toMatch(/signup.*not.*allow|signup_disabled/i);
 });

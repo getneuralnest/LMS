@@ -8,23 +8,18 @@ import {
 } from "../../src/lib/students";
 
 describe("generateUsername", () => {
-  it("strips dots from the first name word and appends the last two roll digits", () => {
-    expect(generateUsername("M.Umair Ali", "241124")).toBe("mumair24");
-    expect(generateUsername("Syed M.Zubair Bukhari", "241132")).toBe("syed32");
-  });
-
-  it("creates distinct usernames for students with the same first name", () => {
-    expect(generateUsername("Aman Fatima", "241117")).toBe("aman17");
-    expect(generateUsername("Aman Ahmed", "241143")).toBe("aman43");
-  });
-
-  it("uses the full roll number when the short username is already taken", () => {
-    expect(generateUsername("Aman Fatima", "241117", new Set(["aman17"]))).toBe(
-      "aman241117",
+  it("removes non-ASCII letters from the full name and appends the full roll number", () => {
+    expect(generateUsername("M.Umair Ali", "241124")).toBe("mumairali241124");
+    expect(generateUsername("Syed M.Zubair Bukhari", "241132")).toBe(
+      "syedmzubairbukhari241132",
     );
-    expect(() =>
-      generateUsername("Aman Fatima", "241117", new Set(["aman17", "aman241117"])),
-    ).toThrow("Both generated usernames are already in use.");
+  });
+
+  it("preserves leading zeroes in the roll number and rejects names without ASCII letters", () => {
+    expect(generateUsername("Éva 2", "00124")).toBe("va00124");
+    expect(() => generateUsername("123", "00124")).toThrow(
+      "A username requires ASCII letters in the name and a roll number.",
+    );
   });
 });
 
@@ -46,13 +41,13 @@ describe("parseStudentCsv", () => {
     );
     const students = parseStudentCsv(csv);
 
-    expect(students).toHaveLength(4);
+    expect(students).toHaveLength(3);
     expect(students[0]).toEqual({
-      name: "M.Umair Ali",
-      roll_no: "241124",
-      uni_roll_no: "UNI-241124",
+      name: "Test Student Alpha",
+      roll_no: "990001",
+      uni_roll_no: "UNI-990001",
     });
-    expect(students.filter((student) => student.name.startsWith("Aman"))).toHaveLength(2);
+    expect(students.filter((student) => student.name.startsWith("Test Student"))).toHaveLength(3);
   });
 
   it("rejects duplicated roll numbers and university roll numbers", () => {

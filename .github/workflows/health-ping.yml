@@ -1,0 +1,27 @@
+name: Production health ping
+
+on:
+  schedule:
+    - cron: "0 9 */3 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check production configuration
+        env:
+          PRODUCTION_BASE_URL: ${{ vars.PRODUCTION_BASE_URL }}
+        run: |
+          test -n "$PRODUCTION_BASE_URL"
+          case "$PRODUCTION_BASE_URL" in https://*) ;; *) echo "PRODUCTION_BASE_URL must use HTTPS."; exit 1 ;; esac
+      - name: Check portal health
+        env:
+          PRODUCTION_BASE_URL: ${{ vars.PRODUCTION_BASE_URL }}
+        run: |
+          curl --fail --silent --show-error --max-time 20 \
+            "$PRODUCTION_BASE_URL/api/health" |
+            node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{if(JSON.parse(s).status!=="ok")process.exit(1)})'

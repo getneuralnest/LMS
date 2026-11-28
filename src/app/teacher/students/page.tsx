@@ -11,7 +11,7 @@ import {
 } from "../../../components/ui/table";
 import { createClient } from "../../../utils/supabase/server";
 import { ImportStudentsForm } from "./import-form";
-import { SetCrRoleButton } from "./role-button";
+import { ResetStudentPasswordButton, SetCrRoleButton } from "./role-button";
 
 type StudentsPageProps = {
   searchParams: Promise<{ class_id?: string | string[] }>;
@@ -63,7 +63,10 @@ export default async function TeacherStudentsPage({ searchParams }: StudentsPage
 
   const memberIds = members.map((member) => member.user_id);
   const { data: profiles, error: profilesError } = memberIds.length
-    ? await supabase.from("profiles").select("id,full_name,username").in("id", memberIds)
+    ? await supabase
+        .from("profiles")
+        .select("id,full_name,username,claimed_at,contact_email,email_confirmed_at,is_active")
+        .in("id", memberIds)
     : { data: [], error: null };
   if (profilesError) {
     throw new Error("Could not load student profiles.");
@@ -111,6 +114,8 @@ export default async function TeacherStudentsPage({ searchParams }: StudentsPage
                 <TableHead>Roll number</TableHead>
                 <TableHead>University roll number</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Account</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -125,9 +130,28 @@ export default async function TeacherStudentsPage({ searchParams }: StudentsPage
                     <TableCell>{member.uni_roll_no ?? "—"}</TableCell>
                     <TableCell>{member.role}</TableCell>
                     <TableCell>
-                      {member.role === "student" && (
-                        <SetCrRoleButton classId={classId} studentId={member.user_id} />
-                      )}
+                      {!profile?.is_active
+                        ? "Inactive"
+                        : profile.claimed_at
+                          ? "Claimed"
+                          : "Needs claim"}
+                    </TableCell>
+                    <TableCell>
+                      {profile?.email_confirmed_at
+                        ? "Confirmed"
+                        : profile?.contact_email
+                          ? "Pending"
+                          : "Not set"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-2">
+                        {member.role === "student" && (
+                          <SetCrRoleButton classId={classId} studentId={member.user_id} />
+                        )}
+                        {(member.role === "student" || member.role === "cr") && (
+                          <ResetStudentPasswordButton classId={classId} studentId={member.user_id} />
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

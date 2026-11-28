@@ -14,34 +14,10 @@ import {
 } from "../../../components/ui/table";
 import {
   uploadStudents,
-  type StudentImportResult,
   type StudentImportState,
 } from "./actions";
 
 const initialState: StudentImportState = { error: null, result: null };
-
-function escapeCsvField(value: string): string {
-  return /[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
-}
-
-function downloadCredentials(result: StudentImportResult) {
-  const rows = [
-    ["name", "roll_no", "username", "temp_password"],
-    ...result.credentials.map(({ name, roll_no, username, temp_password }) => [
-      name,
-      roll_no,
-      username,
-      temp_password,
-    ]),
-  ];
-  const csv = rows.map((row) => row.map(escapeCsvField).join(",")).join("\r\n");
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "student-credentials.csv";
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 export function ImportStudentsForm({ classId }: { classId: string }) {
   const [state, formAction, pending] = useActionState(uploadStudents, initialState);
@@ -60,8 +36,8 @@ export function ImportStudentsForm({ classId }: { classId: string }) {
         <CardHeader>
           <CardTitle>Import students</CardTitle>
           <CardDescription>
-            Upload a CSV with the exact header name,roll_no,uni_roll_no. Credentials are shown
-            once and disappear when this page is reloaded.
+            Upload a CSV with the exact header name,roll_no,uni_roll_no. Initial passwords match
+            each generated username; students must set a new password at first sign-in.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -75,9 +51,6 @@ export function ImportStudentsForm({ classId }: { classId: string }) {
               {pending ? "Importing..." : "Upload CSV"}
             </Button>
           </form>
-          <p role="note" className="text-sm text-muted-foreground">
-            Download the credentials now. They will not be available again.
-          </p>
           {state.error && <p role="alert" className="text-sm text-destructive">{state.error}</p>}
         </CardContent>
       </Card>
@@ -114,11 +87,6 @@ export function ImportStudentsForm({ classId }: { classId: string }) {
                 ))}
               </TableBody>
             </Table>
-            {result.credentials.length > 0 && (
-              <Button type="button" onClick={() => downloadCredentials(result)}>
-                Download credentials CSV
-              </Button>
-            )}
           </CardContent>
         </Card>
       )}

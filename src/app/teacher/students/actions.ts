@@ -2,39 +2,28 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import { z } from "zod";
 import { classRoleChangeSchema } from "../../../lib/auth-schemas";
-import { studentImportRequestSchema } from "../../../lib/students";
-import { getSupabasePublicEnvironment } from "../../../lib/supabase-env";
+import {
+  createStudentAccounts,
+  generateTemporaryPassword,
+  parseStudentCsv,
+  studentImportRequestSchema,
+  type StudentImportResult,
+} from "../../../lib/students";
+import { studentResetSchema } from "../../../lib/auth-schemas";
+import { createAdminClient } from "../../../utils/supabase/admin";
 import { createClient } from "../../../utils/supabase/server";
 
-const rowResultSchema = z.object({
-  name: z.string(),
-  roll_no: z.string(),
-  username: z.string().optional(),
-  reason: z.string().optional(),
-});
-
-const credentialsSchema = z.object({
-  name: z.string(),
-  roll_no: z.string(),
-  username: z.string(),
-  temp_password: z.string(),
-});
-
-const importResultSchema = z.object({
-  created: z.array(rowResultSchema),
-  skipped: z.array(rowResultSchema),
-  failed: z.array(rowResultSchema),
-  credentials: z.array(credentialsSchema),
-});
-
-export type StudentImportResult = z.infer<typeof importResultSchema>;
 export type StudentImportState = {
   error: string | null;
   result: StudentImportResult | null;
 };
 export type StudentRoleState = { message: string | null; error: string | null };
+export type StudentResetState = {
+  message: string | null;
+  error: string | null;
+  generatedPassword?: string;
+};
 
 const initialImportFailure = (error: string): StudentImportState => ({
   error,
@@ -54,6 +43,9 @@ export async function uploadStudents(
   if (!(file instanceof File)) {
     return initialImportFailure("Choose a CSV file.");
   }
+  if (file.size > 1_000_000) {
+    return initialImportFailure("CSV files must be 1 MB or smaller.");
+  }
 
   const parsed = studentImportRequestSchema.safeParse({
     class_id: formString(formData, "class_id"),
@@ -72,47 +64,54 @@ export async function uploadStudents(
     return initialImportFailure("Sign in again before importing students.");
   }
 
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError || !sessionData.session?.access_token) {
-    return initialImportFailure("Could not establish an authenticated session.");
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("is_admin,is_active")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError || !profile?.is_active) {
+    return initialImportFailure("Could not verify account access.");
   }
 
-  const { NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY } =
-    getSupabasePublicEnvironment();
-  const response = await fetch(
-    `${NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-students`,
-    {
-      method: "POST",
-      headers: {
-        apikey: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-        Authorization: `Bearer ${sessionData.session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(parsed.data),
-      cache: "no-store",
-    },
-  );
-  let responseBody: unknown;
+  const { data: membership, error: membershipError } = await supabase
+    .from("class_members")
+    .select("role")
+    .eq("class_id", parsed.data.class_id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (membershipError) {
+    return initialImportFailure("Could not verify class access.");
+  }
+  if (!profile.is_admin && membership?.role !== "teacher") {
+    return initialImportFailure("Teacher access required.");
+  }
+
+  let students: ReturnType<typeof parseStudentCsv>;
   try {
-    responseBody = await response.json();
-  } catch {
-    return initialImportFailure("Student import returned an invalid response.");
-  }
-
-  if (!response.ok) {
-    const errorResponse = z.object({ error: z.string() }).safeParse(responseBody);
+    students = parseStudentCsv(parsed.data.csv);
+  } catch (error) {
     return initialImportFailure(
-      errorResponse.success ? errorResponse.data.error : "Student import failed.",
+      error instanceof Error ? error.message : "Could not parse the student CSV.",
     );
   }
 
-  const result = importResultSchema.safeParse(responseBody);
-  if (!result.success) {
-    return initialImportFailure("Student import returned an invalid response.");
+  let result: StudentImportResult;
+  try {
+    result = await createStudentAccounts(
+      createAdminClient(),
+      parsed.data.class_id,
+      students,
+      user.id,
+    );
+  } catch (error) {
+    return initialImportFailure(
+      error instanceof Error ? error.message : "Student import failed.",
+    );
   }
 
   revalidatePath("/teacher/students");
-  return { error: null, result: result.data };
+  revalidatePath("/admin/students");
+  return { error: null, result };
 }
 
 export async function setStudentRoleToCr(
@@ -173,4 +172,71 @@ export async function setStudentRoleToCr(
 
   revalidatePath("/teacher/students");
   return { message: "Student role changed to CR.", error: null };
+}
+
+export async function resetStudentPassword(
+  _previousState: StudentResetState,
+  formData: FormData,
+): Promise<StudentResetState> {
+  const parsed = studentResetSchema.safeParse({
+    classId: formString(formData, "classId"),
+    studentId: formString(formData, "studentId"),
+  });
+  if (!parsed.success) return { message: null, error: "Invalid class or student." };
+
+  const supabase = createClient(await cookies());
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError || !user) return { message: null, error: "Sign in again before resetting a password." };
+
+  const { data: teacherMembership, error: teacherError } = await supabase
+    .from("class_members")
+    .select("role")
+    .eq("class_id", parsed.data.classId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (teacherError || teacherMembership?.role !== "teacher") {
+    return { message: null, error: "Teacher access required." };
+  }
+
+  const { data: studentMembership, error: studentError } = await supabase
+    .from("class_members")
+    .select("role")
+    .eq("class_id", parsed.data.classId)
+    .eq("user_id", parsed.data.studentId)
+    .maybeSingle();
+  if (studentError || !studentMembership || !["student", "cr"].includes(studentMembership.role)) {
+    return { message: null, error: "The selected account is not a student in this class." };
+  }
+
+  const password = generateTemporaryPassword();
+  const admin = createAdminClient();
+  const { error: authError } = await admin.auth.admin.updateUserById(parsed.data.studentId, {
+    password,
+    app_metadata: { must_change_password: true },
+  });
+  if (authError) return { message: null, error: "Could not reset the student password." };
+
+  const { error: profileError } = await admin
+    .from("profiles")
+    .update({ sessions_revoked_at: new Date().toISOString() })
+    .eq("id", parsed.data.studentId);
+  if (profileError) return { message: null, error: "Password reset, but active sessions remain." };
+
+  const { error: auditError } = await admin.from("account_audit_log").insert({
+    class_id: parsed.data.classId,
+    actor: user.id,
+    target_user_id: parsed.data.studentId,
+    action: "student_password_reset",
+  });
+  if (auditError) return { message: null, error: "Password reset, but audit logging failed." };
+
+  revalidatePath("/teacher/students");
+  return {
+    message: "Password reset. The student must set a new password at next sign-in.",
+    error: null,
+    generatedPassword: password,
+  };
 }

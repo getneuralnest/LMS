@@ -1,0 +1,38 @@
+name: Encrypted database backup
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require backup secrets
+        run: |
+          test -n "$SUPABASE_DB_URL"
+          test -n "$BACKUP_ENCRYPTION_KEY"
+      - name: Dump and encrypt database
+        run: |
+          npx supabase db dump --remote="$SUPABASE_DB_URL" --file="$RUNNER_TEMP/class-portal.sql"
+          printf '%s' "$BACKUP_ENCRYPTION_KEY" |
+            gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 0 \
+              --output "$RUNNER_TEMP/class-portal.sql.gpg" "$RUNNER_TEMP/class-portal.sql"
+          rm "$RUNNER_TEMP/class-portal.sql"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: database-backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/class-portal.sql.gpg
+          retention-days: 14
+          if-no-files-found: error

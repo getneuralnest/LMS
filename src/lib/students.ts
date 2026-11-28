@@ -1,9 +1,12 @@
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export const AUTH_EMAIL_DOMAIN = "students.example.com";
 
 export const studentImportRequestSchema = z
   .object({
     class_id: z.string().uuid(),
-    csv: z.string().min(1),
+    csv: z.string().min(1).max(1_000_000),
   })
   .strict();
 
@@ -152,26 +155,15 @@ export function parseStudentCsv(csv: string): StudentCsvRow[] {
 export function generateUsername(
   name: string,
   rollNo: string,
-  existingUsernames: ReadonlySet<string> = new Set(),
 ): string {
-  const firstWord = name.trim().split(/\s+/)[0] ?? "";
-  const namePart = firstWord.toLowerCase().replaceAll(".", "").replace(/[^a-z]/g, "");
-  const digits = rollNo.match(/\d/g)?.join("") ?? "";
+  const namePart = name.toLowerCase().replace(/[^a-z]/g, "");
+  const rollPart = rollNo.trim();
 
-  if (!namePart || !digits) {
-    throw new Error("A username requires letters in the name and digits in the roll number.");
+  if (!namePart || !rollPart) {
+    throw new Error("A username requires ASCII letters in the name and a roll number.");
   }
 
-  const primary = `${namePart}${digits.slice(-2)}`;
-  if (!existingUsernames.has(primary)) {
-    return primary;
-  }
-
-  const fallback = `${namePart}${digits}`;
-  if (!existingUsernames.has(fallback)) {
-    return fallback;
-  }
-  throw new Error("Both generated usernames are already in use.");
+  return `${namePart}${rollPart}`;
 }
 
 const TEMP_PASSWORD_ALPHABET =
@@ -195,4 +187,168 @@ export function generateTemporaryPassword(): string {
   }
 
   return password;
+}
+
+export type StudentImportRowResult = {
+  name: string;
+  roll_no: string;
+  username?: string;
+  reason?: string;
+};
+
+export type StudentImportResult = {
+  created: StudentImportRowResult[];
+  skipped: StudentImportRowResult[];
+  failed: StudentImportRowResult[];
+};
+
+export async function createStudentAccounts(
+  adminClient: SupabaseClient,
+  classId: string,
+  students: StudentCsvRow[],
+  actorId?: string,
+): Promise<StudentImportResult> {
+  const { data: classMembers, error: classMembersError } = await adminClient
+    .from("class_members")
+    .select("roll_no")
+    .eq("class_id", classId)
+    .not("roll_no", "is", null);
+
+  if (classMembersError) {
+    throw new Error("Could not read class student records.");
+  }
+
+  const existingRollNumbers = new Set(
+    classMembers.map((member) => member.roll_no).filter((value): value is string => !!value),
+  );
+  const result: StudentImportResult = { created: [], skipped: [], failed: [] };
+
+  for (const student of students) {
+    if (existingRollNumbers.has(student.roll_no)) {
+      result.skipped.push({
+        name: student.name,
+        roll_no: student.roll_no,
+        reason: "Roll number already exists in this class.",
+      });
+      continue;
+    }
+
+    let userId: string | null = null;
+    try {
+      const username = generateUsername(student.name, student.roll_no);
+      const { data: usernameMatch, error: usernameError } = await adminClient
+        .from("profiles")
+        .select("id")
+        .eq("username", username)
+        .maybeSingle();
+
+      if (usernameError) {
+        result.failed.push({
+          name: student.name,
+          roll_no: student.roll_no,
+          reason: "Could not check username availability.",
+        });
+        continue;
+      }
+      if (usernameMatch) {
+        result.failed.push({
+          name: student.name,
+          roll_no: student.roll_no,
+          reason: "Generated username is already in use.",
+        });
+        continue;
+      }
+
+      const { data: createdUser, error: createUserError } =
+        await adminClient.auth.admin.createUser({
+          email: `${username}@${AUTH_EMAIL_DOMAIN}`,
+          password: username,
+          email_confirm: true,
+          app_metadata: { must_change_password: true },
+          user_metadata: { full_name: student.name },
+        });
+
+      if (createUserError || !createdUser.user) {
+        result.failed.push({
+          name: student.name,
+          roll_no: student.roll_no,
+          reason: "Could not create the student account.",
+        });
+        continue;
+      }
+
+      userId = createdUser.user.id;
+      const { error: profileError } = await adminClient.from("profiles").insert({
+        id: userId,
+        full_name: student.name,
+        username,
+        roll_no: student.roll_no,
+        uni_roll_no: student.uni_roll_no,
+      });
+      const { error: membershipError } = profileError
+        ? { error: profileError }
+        : await adminClient.from("class_members").insert({
+            class_id: classId,
+            user_id: userId,
+            role: "student",
+            roll_no: student.roll_no,
+            uni_roll_no: student.uni_roll_no,
+          });
+
+      if (membershipError) {
+        const { error: cleanupError } = await adminClient.auth.admin.deleteUser(userId);
+        result.failed.push({
+          name: student.name,
+          roll_no: student.roll_no,
+          reason: cleanupError
+            ? "Student insert failed and account cleanup could not be completed."
+            : "Could not save student records; the temporary account was removed.",
+        });
+        userId = null;
+        continue;
+      }
+
+      const { error: auditError } = await adminClient.from("account_audit_log").insert({
+        class_id: classId,
+        actor: actorId ?? null,
+        target_user_id: userId,
+        action: "student_created",
+      });
+      if (auditError) {
+        const { error: cleanupError } = await adminClient.auth.admin.deleteUser(userId);
+        result.failed.push({
+          name: student.name,
+          roll_no: student.roll_no,
+          reason: cleanupError
+            ? "Student audit record failed and account cleanup could not be completed."
+            : "Could not record account creation; the account was removed.",
+        });
+        userId = null;
+        continue;
+      }
+
+      userId = null;
+      existingRollNumbers.add(student.roll_no);
+      result.created.push({ name: student.name, roll_no: student.roll_no, username });
+    } catch {
+      if (userId) {
+        const { error: cleanupError } = await adminClient.auth.admin.deleteUser(userId);
+        result.failed.push({
+          name: student.name,
+          roll_no: student.roll_no,
+          reason: cleanupError
+            ? "Student creation failed and account cleanup could not be completed."
+            : "Could not create the student account; the account was removed.",
+        });
+      } else {
+        result.failed.push({
+          name: student.name,
+          roll_no: student.roll_no,
+          reason: "Could not create the student account.",
+        });
+      }
+    }
+  }
+
+  return result;
 }

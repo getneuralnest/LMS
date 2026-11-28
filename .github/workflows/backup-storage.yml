@@ -1,0 +1,42 @@
+name: Encrypted storage backup
+
+on:
+  schedule:
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+      STORAGE_BACKUP_DIR: ${{ runner.temp }}/storage-backup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require backup secrets
+        run: |
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$BACKUP_ENCRYPTION_KEY"
+      - name: Download and encrypt private submissions
+        run: |
+          node scripts/backup-storage.mjs
+          tar -czf "$RUNNER_TEMP/submissions.tar.gz" -C "$STORAGE_BACKUP_DIR" .
+          printf '%s' "$BACKUP_ENCRYPTION_KEY" |
+            gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 0 \
+              --output "$RUNNER_TEMP/submissions.tar.gz.gpg" "$RUNNER_TEMP/submissions.tar.gz"
+          rm "$RUNNER_TEMP/submissions.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: storage-backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/submissions.tar.gz.gpg
+          retention-days: 60
+          if-no-files-found: error
