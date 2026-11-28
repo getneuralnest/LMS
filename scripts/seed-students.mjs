@@ -13,8 +13,11 @@ function parseEnvFile(source) {
   );
 }
 
-const fileEnvironment = existsSync(".env.local")
-  ? parseEnvFile(await readFile(".env.local", "utf8"))
+// Accept --env-file=.env.production.local to target production. Never auto-load it.
+const envFileArg = process.argv.find((a) => a.startsWith("--env-file="));
+const envFilePath = envFileArg?.slice("--env-file=".length) ?? ".env.local";
+const fileEnvironment = existsSync(envFilePath)
+  ? parseEnvFile(await readFile(envFilePath, "utf8"))
   : {};
 const env = { ...fileEnvironment, ...process.env };
 const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;

@@ -15,12 +15,14 @@ const environmentSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  AUTH_EMAIL_DOMAIN: z.string().min(1).default("students.example.com"),
 });
 
 const env = environmentSchema.parse({
   SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
   SUPABASE_ANON_KEY: Deno.env.get("SUPABASE_ANON_KEY"),
   SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+  AUTH_EMAIL_DOMAIN: Deno.env.get("AUTH_EMAIL_DOMAIN"),
 });
 
 function jsonResponse(body: unknown, status: number): Response {
@@ -99,6 +101,7 @@ Deno.serve(async (request) => {
     parsedInput.data.class_id,
     students,
     user.id,
+    env.AUTH_EMAIL_DOMAIN,
   );
   return jsonResponse(result, 200);
 });

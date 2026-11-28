@@ -11,29 +11,34 @@ permissions:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
-      STORAGE_BACKUP_DIR: ${{ runner.temp }}/storage-backup
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Require backup secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
         run: |
           test -n "$SUPABASE_URL"
           test -n "$SUPABASE_SERVICE_ROLE_KEY"
           test -n "$BACKUP_ENCRYPTION_KEY"
       - name: Download and encrypt private submissions
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          STORAGE_BACKUP_DIR: ${{ runner.temp }}/storage-backup
         run: |
           node scripts/backup-storage.mjs
-          tar -czf "$RUNNER_TEMP/submissions.tar.gz" -C "$STORAGE_BACKUP_DIR" .
+          tar -czf "${{ runner.temp }}/submissions.tar.gz" -C "$STORAGE_BACKUP_DIR" .
           printf '%s' "$BACKUP_ENCRYPTION_KEY" |
             gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 0 \
-              --output "$RUNNER_TEMP/submissions.tar.gz.gpg" "$RUNNER_TEMP/submissions.tar.gz"
-          rm "$RUNNER_TEMP/submissions.tar.gz"
+              --output "${{ runner.temp }}/submissions.tar.gz.gpg" \
+              "${{ runner.temp }}/submissions.tar.gz"
+          rm "${{ runner.temp }}/submissions.tar.gz"
       - uses: actions/upload-artifact@v4
         with:
           name: storage-backup-${{ github.run_id }}

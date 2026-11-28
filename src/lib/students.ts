@@ -207,6 +207,7 @@ export async function createStudentAccounts(
   classId: string,
   students: StudentCsvRow[],
   actorId?: string,
+  emailDomain: string = AUTH_EMAIL_DOMAIN,
 ): Promise<StudentImportResult> {
   const { data: classMembers, error: classMembersError } = await adminClient
     .from("class_members")
@@ -261,7 +262,7 @@ export async function createStudentAccounts(
 
       const { data: createdUser, error: createUserError } =
         await adminClient.auth.admin.createUser({
-          email: `${username}@${AUTH_EMAIL_DOMAIN}`,
+          email: `${username}@${emailDomain}`,
           password: username,
           email_confirm: true,
           app_metadata: { must_change_password: true },

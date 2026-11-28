@@ -14,6 +14,9 @@ jobs:
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,7 +28,7 @@ jobs:
           test -n "$BACKUP_ENCRYPTION_KEY"
       - name: Dump and encrypt database
         run: |
-          npx supabase db dump --remote="$SUPABASE_DB_URL" --file="$RUNNER_TEMP/class-portal.sql"
+          npx supabase db dump --db-url "$SUPABASE_DB_URL" --file "$RUNNER_TEMP/class-portal.sql"
           printf '%s' "$BACKUP_ENCRYPTION_KEY" |
             gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 0 \
               --output "$RUNNER_TEMP/class-portal.sql.gpg" "$RUNNER_TEMP/class-portal.sql"

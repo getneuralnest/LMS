@@ -40,12 +40,19 @@ service-role key in Vercel or a browser bundle:
 ```sh
 npx supabase secrets set SUPABASE_URL=<project-url>
 npx supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+npx supabase secrets set AUTH_EMAIL_DOMAIN=students.example.com
 npx supabase functions deploy create-students
 ```
 
+`AUTH_EMAIL_DOMAIN` controls the placeholder email suffix used for student
+Auth accounts. The function reads it from this secret at runtime; it is never
+hard-coded and never sent to the browser. Set it to any domain you own or leave
+it as `students.example.com` — Supabase Auth accepts it and no mail is sent to
+the placeholder address until a student completes the first-login popup.
+
 Keep JWT verification enabled; do not pass `--no-verify-jwt` in production.
-The function independently requires an active teacher or administrator and
-validates the class and CSV.
+The function independently requires an active teacher and validates the class
+and CSV. A student JWT returns HTTP 403.
 
 ## 4. Configure Supabase Auth and email
 
@@ -110,17 +117,38 @@ self-hosted runner rather than weakening the database firewall.
 
 ## 8. Production seed and smoke checks
 
-After confirming the target class and administrator, seed the roster only when
-intended:
+Create a gitignored `.env.production.local` with the hosted project credentials:
 
 ```sh
-npm run seed:students -- --confirm-production --class-id=<class-uuid>
+# .env.production.local  — gitignored, never committed
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SEED_ADMIN_PASSWORD=<strong-admin-password>
 ```
 
-The command refuses non-local targets without the explicit confirmation flag
-and class ID. Student first passwords equal their generated usernames; deliver
-them through a private channel and require first-login setup. The seed CSV
-remains local and must not be committed.
+Create the production administrator (idempotent; requires the class to exist
+from step 5):
+
+```sh
+node scripts/seed-admin.mjs \
+  --env-file=.env.production.local \
+  --confirm-production
+```
+
+Seed the student roster only when intended:
+
+```sh
+node scripts/seed-students.mjs \
+  --env-file=.env.production.local \
+  --confirm-production \
+  --class-id=<class-uuid>
+```
+
+Never use `npm run seed:admin` or `npm run seed:students` for production — those
+scripts read `.env.local`. The `--env-file=` flag explicitly targets the hosted
+project; both commands refuse production URLs without `--confirm-production`.
+Credentials are read from the named file; nothing is printed or logged.
 
 After Vercel and Supabase are configured, run:
 

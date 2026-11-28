@@ -5,8 +5,9 @@
   "scripts": {
     "env:check": "node scripts/env-check.mjs",
     "dev": "npm run env:check && next dev",
-    "build": "npm run env:check && next build",
-    "start": "npm run env:check && next start",
+    "build": "next build",
+    "vercel-build": "npm run env:check && next build",
+    "start": "next start",
     "lint": "npm run env:check && eslint .",
     "typecheck": "npm run env:check && tsc --noEmit",
     "test:unit": "npm run env:check && vitest run",

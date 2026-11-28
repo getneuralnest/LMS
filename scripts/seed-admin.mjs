@@ -12,8 +12,11 @@ function parseEnvFile(source) {
   );
 }
 
-const fileEnvironment = existsSync(".env.local")
-  ? parseEnvFile(await readFile(".env.local", "utf8"))
+// Accept --env-file=.env.production.local to target production. Never auto-load it.
+const envFileArg = process.argv.find((a) => a.startsWith("--env-file="));
+const envFilePath = envFileArg?.slice("--env-file=".length) ?? ".env.local";
+const fileEnvironment = existsSync(envFilePath)
+  ? parseEnvFile(await readFile(envFilePath, "utf8"))
   : {};
 const env = { ...fileEnvironment, ...process.env };
 const e2e = process.argv.includes("--e2e");
@@ -21,8 +24,22 @@ const url = env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
 const host = url ? new URL(url).hostname : "";
 
-if (!url || !serviceKey || !["localhost", "127.0.0.1", "::1"].includes(host)) {
-  throw new Error("seed:admin can only run against local Supabase.");
+const isLocal = ["localhost", "127.0.0.1", "::1"].includes(host);
+if (!url || !serviceKey) {
+  throw new Error("Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+}
+// Protect against accidental production use: require explicit --env-file for non-local URLs.
+// E2E always targets local only.
+if (e2e && !isLocal) {
+  throw new Error("seed:admin --e2e can only run against local Supabase.");
+}
+if (!isLocal && !envFileArg) {
+  throw new Error(
+    "Production seed:admin requires --env-file=.env.production.local. Never uses .env.local for production.",
+  );
+}
+if (!isLocal && !process.argv.includes("--confirm-production")) {
+  throw new Error("Production seed:admin requires --confirm-production.");
 }
 
 const adminPassword = e2e ? env.E2E_ADMIN_PASSWORD : env.SEED_ADMIN_PASSWORD;
