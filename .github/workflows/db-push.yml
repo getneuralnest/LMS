@@ -24,4 +24,4 @@ jobs:
       - name: Preview
         run: npx supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
       - name: Apply
-        run: npx supabase db push --db-url "$SUPABASE_DB_URL"
+        run: npx supabase db push --db-url "$SUPABASE_DB_URL" --yes
