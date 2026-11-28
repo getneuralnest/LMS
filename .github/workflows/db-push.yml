@@ -3,24 +3,25 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: Type push-production to continue
-        required: true
+        description: Tick to push migrations to production
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   push:
-    if: ${{ github.event.inputs.confirm == 'push-production' }}
+    if: ${{ inputs.confirm }}
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Require database secret
+        run: test -n "$SUPABASE_DB_URL" || { echo "SUPABASE_DB_URL secret is missing"; exit 1; }
       - name: Preview
         run: npx supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       - name: Apply
         run: npx supabase db push --db-url "$SUPABASE_DB_URL"
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
